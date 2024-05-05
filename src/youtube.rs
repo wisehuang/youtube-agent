@@ -1,7 +1,7 @@
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 use rocket::serde::Deserialize;
-use youtube_captions::DigestScraper;
+use youtube_captions::{Digest, DigestScraper};
 use youtube_captions::format::Format;
 use youtube_captions::language_tags::LanguageTag;
 use crate::Agent;
@@ -21,14 +21,18 @@ struct Segment {
     utf8: String,
 }
 
+const LANGUAGES: [&'static str; 5] = ["en", "zh-TW", "ja", "zh-Hant", "ko"];
 
 async fn get_transcript(video: &str) -> String {
     let digest = DigestScraper::new(reqwest::Client::new());
-    // Fetch the video
-    let scraped = digest.fetch(video, "zh").await.unwrap();
 
-    // Find our preferred language - in this case, english
-    let language = LanguageTag::parse("zh").unwrap();
+    // Fetch the video
+    let scraped = fetch_video(video, digest).await;
+
+    // scraped.captions.iter().for_each(|caption| println!("{}", caption.lang_tag));
+
+    // Find our preferred language, the priority is the order of LANGUAGES
+    let language = find_preferred_language().unwrap();
 
     let captions = scraped.captions.into_iter()
         .find(|caption| language.matches(&caption.lang_tag))
@@ -46,6 +50,38 @@ async fn get_transcript(video: &str) -> String {
         .join(" ");
 
     transcript
+}
+
+fn find_preferred_language() -> Option<LanguageTag> {
+    let mut language = None;
+
+    for lang in LANGUAGES {
+        match LanguageTag::parse(lang) {
+            Ok(result) => {
+                language = Some(result);
+                break;
+            }
+            Err(_) => continue,
+        }
+    }
+    language
+}
+
+async fn fetch_video(video: &str, digest: DigestScraper) -> Digest {
+    let mut scraped = None;
+
+    for lang in LANGUAGES {
+        match digest.fetch(video, lang).await {
+            Ok(result) => {
+                scraped = Some(result);
+                break;
+            }
+            Err(_) => continue,
+        }
+    }
+
+    let scraped = scraped.unwrap();
+    scraped
 }
 
 pub(crate) async fn summarize_video(video: &str, openai_api_key: &str) -> String {
