@@ -1,7 +1,8 @@
+use std::time::Duration;
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 use rocket::serde::Deserialize;
-use youtube_captions::{Digest, DigestScraper};
+use youtube_captions::{CaptionScraper, Digest, DigestScraper};
 use youtube_captions::format::Format;
 use youtube_captions::language_tags::LanguageTag;
 use crate::Agent;
@@ -21,10 +22,13 @@ struct Segment {
     utf8: String,
 }
 
-const LANGUAGES: [&'static str; 5] = ["en", "zh-TW", "ja", "zh-Hant", "ko"];
+const LANGUAGES: [&'static str; 6] = ["en", "zh-TW", "ja", "zh-Hant", "ko", "zh"];
 
 async fn get_transcript(video: &str) -> String {
-    let digest = DigestScraper::new(reqwest::Client::new());
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build().unwrap();
+    let digest = DigestScraper::new(client);
 
     // Fetch the video
     let scraped = fetch_video(video, digest).await;
@@ -32,11 +36,9 @@ async fn get_transcript(video: &str) -> String {
     // scraped.captions.iter().for_each(|caption| println!("{}", caption.lang_tag));
 
     // Find our preferred language, the priority is the order of LANGUAGES
-    let language = find_preferred_language().unwrap();
+    let language = get_caption_language(&scraped).unwrap();
+    let captions = scraped.captions.iter().find(|caption| caption.lang_tag == language).unwrap();
 
-    let captions = scraped.captions.into_iter()
-        .find(|caption| language.matches(&caption.lang_tag))
-        .unwrap();
     let transcript_json = captions.fetch(Format::JSON3).await.unwrap();
 
     let root: Transcript = serde_json::from_str(transcript_json.as_str()).unwrap();
@@ -50,6 +52,16 @@ async fn get_transcript(video: &str) -> String {
         .join(" ");
 
     transcript
+}
+
+fn get_caption_language(scraped: &Digest) -> Option<LanguageTag> {
+    for lang in LANGUAGES.iter() {
+        let language = LanguageTag::parse(lang).unwrap();
+        if scraped.captions.iter().any(|caption| language.matches(&caption.lang_tag)) {
+            return Some(language);
+        }
+    }
+    None
 }
 
 fn find_preferred_language() -> Option<LanguageTag> {

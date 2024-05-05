@@ -1,0 +1,2 @@
+[global.limits]
+timeout = 120000

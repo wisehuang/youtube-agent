@@ -45,6 +45,7 @@ impl Agent {
     pub(crate) async fn prompt(&mut self, input: String, openai_api_key: &str) -> Result<String, OpenAIError> {
         let config = OpenAIConfig::new()
             .with_api_key(openai_api_key);
+
         let client = Client::with_config(config);
 
         client.chat().create(

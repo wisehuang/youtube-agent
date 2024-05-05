@@ -3,8 +3,10 @@ mod youtube;
 
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
-use rocket::{get, routes, State};
+use rocket::{catch, catchers, get, Request, routes, State};
+use rocket::serde::Serialize;
 use shuttle_runtime::__internals::Context;
+use shuttle_runtime::__internals::tracing_subscriber::fmt::format::Json;
 use shuttle_runtime::SecretStore;
 
 pub(crate) enum Role {
@@ -29,6 +31,23 @@ struct SecretState {
     openai_api_key: String,
 }
 
+#[derive(Serialize)]
+struct ErrorResponse {
+    code: String,
+    message: String,
+    success: bool,
+}
+
+#[catch(404)]
+fn not_found(req: &Request) -> String {
+    format!("Sorry, '{}' is not a valid path.", req.uri())
+}
+
+#[catch(500)]
+fn internal_error(req: &Request) -> String {
+    "Sorry, There is an internal server error".to_string()
+}
+
 #[get("/")]
 fn index() -> &'static str {
     "Hello, world!"
@@ -46,7 +65,9 @@ async fn main(#[shuttle_runtime::Secrets] _secrets: SecretStore) -> shuttle_rock
         openai_api_key,
     };
 
-    let rocket = rocket::build().mount("/", routes![index, get_youtube_summary]).manage(secret_state);
+    let rocket = rocket::build()
+        .register("/", catchers![not_found, internal_error])
+        .mount("/", routes![index, get_youtube_summary]).manage(secret_state);
 
     Ok(rocket.into())
 }
