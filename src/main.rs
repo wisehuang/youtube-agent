@@ -31,12 +31,21 @@ pub(crate) struct Agent {
 }
 
 struct SecretState {
-    openai_api_key: String,
+    // openai_api_key: String,
     api_key: String,
 }
 
 #[derive(Debug)]
 struct ApiKey<'r>(&'r str);
+
+#[derive(Debug)]
+struct OpenAIKey<'r>(&'r str);
+
+impl<'r> AsRef<str> for OpenAIKey<'r> {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
 
 #[derive(Debug)]
 enum ApiKeyError {
@@ -72,21 +81,19 @@ fn internal_error() -> String {
 }
 
 #[get("/")]
-fn index(key: ApiKey<'_>) -> &'static str {
+fn index(_key: ApiKey<'_>, _openai_key: OpenAIKey<'_>) -> &'static str {
     "Hello, world!"
 }
 
 #[get("/youtube/<video_id>")]
-async fn get_youtube_summary(state: &State<SecretState>, video_id: &str, key: ApiKey<'_>) -> String {
-    youtube::summarize_video(video_id, state.openai_api_key.as_str()).await
+async fn get_youtube_summary<'r>(state: &State<SecretState>, video_id: &str, _key: ApiKey<'_>, _openai_key: OpenAIKey<'_>) -> String {
+    youtube::summarize_video(video_id, _openai_key.as_ref()).await
 }
 
 #[shuttle_runtime::main]
 async fn main(#[shuttle_runtime::Secrets] _secrets: SecretStore) -> shuttle_rocket::ShuttleRocket {
-    let openai_api_key = _secrets.get("OPENAI_API_KEY").context("OPENAI_API_KEY was not found").unwrap();
     let api_key = _secrets.get("API_TOKEN").context("API_TOKEN was not found").unwrap();
     let secret_state = SecretState {
-        openai_api_key,
         api_key,
     };
 
@@ -112,6 +119,19 @@ impl<'r> FromRequest<'r> for ApiKey<'r> {
             None => Outcome::Error((Status::Unauthorized, ApiKeyError::Missing)),
             Some(key) if is_valid(key, &secret_state.api_key) => Outcome::Success(ApiKey(key)),
             Some(_) => Outcome::Error((Status::Unauthorized, ApiKeyError::Invalid)),
+        }
+    }
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for OpenAIKey<'r> {
+    type Error = ApiKeyError;
+
+    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+
+        match req.headers().get_one("x-openai-key") {
+            None => Outcome::Error((Status::BadRequest, ApiKeyError::Missing)),
+            Some(key) => Outcome::Success(OpenAIKey(key)),
         }
     }
 }
