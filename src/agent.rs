@@ -4,9 +4,9 @@ use async_openai::error::OpenAIError;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs};
 use crate::Agent;
 
-pub(crate) static SUMMARY_PROMPT : &str = r#"You are an agent dedicated to summarising video transcripts.
+static SUMMARY_PROMPT : &str = r#"You are an agent dedicated to summarising video transcripts.
 You will receive a transcript and answer with main talking points of the video fi()rst,
-followed by a complete summary of the transcript. Answer only in this format:
+followed by a complete summary of the transcript. Answer only in this format and translate to $:
 
 
 Talking points:
@@ -18,8 +18,8 @@ Summary:
 Summary of the transcript
 "#;
 
-pub(crate) static SUMMARY_TO_JSON_PROMPT: &str = r#"You are an agent dedicated to translating text to JSON. You will receive the text and return it in JSON format.
-The format is as follows:
+static SUMMARY_TO_JSON_PROMPT: &str = r#"You are an agent dedicated to translating text to JSON. You will receive the text and return it in JSON format.
+The format is as follows and transalte JSON value to $ in the:
 
 
 {
@@ -38,8 +38,16 @@ Rules:
 - Follow the specified JSON format closely
 - Wrap the JSON in a code block
 - Skip prose, return only the JSON
+- Only translate the JSON value, do not translate the keys
 "#;
 
+pub fn get_summary_prompt(lang: &str) -> String {
+    SUMMARY_PROMPT.replace("$", lang)
+}
+
+pub fn get_summary_to_json_prompt(lang: &str) -> String {
+    SUMMARY_TO_JSON_PROMPT.replace("$", lang)
+}
 
 impl Agent {
     pub(crate) async fn prompt(&mut self, input: String, openai_api_key: &str) -> Result<String, OpenAIError> {

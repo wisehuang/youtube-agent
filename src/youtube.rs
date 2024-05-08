@@ -6,7 +6,7 @@ use youtube_captions::{CaptionScraper, Digest, DigestScraper};
 use youtube_captions::format::Format;
 use youtube_captions::language_tags::LanguageTag;
 use crate::Agent;
-use crate::agent::{SUMMARY_PROMPT, SUMMARY_TO_JSON_PROMPT};
+use crate::agent::{get_summary_prompt, get_summary_to_json_prompt};
 
 #[derive(Deserialize)]
 struct Transcript {
@@ -96,7 +96,7 @@ async fn fetch_video(video: &str, digest: DigestScraper) -> Digest {
     scraped
 }
 
-pub(crate) async fn summarize_video(video: &str, openai_api_key: &str) -> String {
+pub(crate) async fn summarize_video(video: &str, openai_api_key: &str, lang: &str) -> String {
     let client = Client::with_config(
         OpenAIConfig::default(),
     );
@@ -105,15 +105,16 @@ pub(crate) async fn summarize_video(video: &str, openai_api_key: &str) -> String
     let transcript = get_transcript(video).await;
 
     // Then we create our summary agent and have it summarize the video for us
+
     let mut summarize_agent = Agent {
-        system: SUMMARY_PROMPT.to_string(),
+        system: get_summary_prompt(lang),
         model: "gpt-4-turbo".to_string(),
         history: vec![],
         client: client.clone(),
     };
 
     let mut summary_to_json_agent = Agent {
-        system: SUMMARY_TO_JSON_PROMPT.to_string(),
+        system: get_summary_to_json_prompt(lang),
         model: "gpt-4-turbo".to_string(),
         history: vec![],
         client: client.clone(),

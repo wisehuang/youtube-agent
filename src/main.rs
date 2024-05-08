@@ -8,6 +8,7 @@ use rocket::{catch, catchers, get, Request, request, routes, State};
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome};
 use rocket::serde::Serialize;
+use rocket::form::FromForm;
 use shuttle_runtime::__internals::Context;
 use shuttle_runtime::__internals::tracing_subscriber::fmt::format::Json;
 use shuttle_runtime::SecretStore;
@@ -53,6 +54,12 @@ enum ApiKeyError {
     Invalid,
 }
 
+#[derive(FromForm)]
+struct Youtube<'r> {
+    lang: &'r str,
+    video_id: &'r str,
+}
+
 #[derive(Serialize)]
 struct ErrorResponse {
     code: String,
@@ -85,9 +92,11 @@ fn index(_key: ApiKey<'_>, _openai_key: OpenAIKey<'_>) -> &'static str {
     "Hello, world!"
 }
 
-#[get("/youtube/<video_id>")]
-async fn get_youtube_summary<'r>(state: &State<SecretState>, video_id: &str, _key: ApiKey<'_>, _openai_key: OpenAIKey<'_>) -> String {
-    youtube::summarize_video(video_id, _openai_key.as_ref()).await
+#[get("/youtube/<video_id>/<lang>")]
+async fn get_youtube_summary(video_id: &str, lang: &str, state: &State<SecretState>, _key: ApiKey<'_>, _openai_key: OpenAIKey<'_>) -> String {
+    let language: &str = if lang.is_empty() { "en" } else { lang };
+
+    youtube::summarize_video(video_id, _openai_key.as_ref(),language).await
 }
 
 #[shuttle_runtime::main]
@@ -128,7 +137,6 @@ impl<'r> FromRequest<'r> for OpenAIKey<'r> {
     type Error = ApiKeyError;
 
     async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-
         match req.headers().get_one("x-openai-key") {
             None => Outcome::Error((Status::BadRequest, ApiKeyError::Missing)),
             Some(key) => Outcome::Success(OpenAIKey(key)),
