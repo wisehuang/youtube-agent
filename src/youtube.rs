@@ -108,14 +108,14 @@ pub(crate) async fn summarize_video(video: &str, openai_api_key: &str, lang: &st
 
     let mut summarize_agent = Agent {
         system: get_summary_prompt(lang),
-        model: "gpt-4-turbo".to_string(),
+        model: "gpt-4o".to_string(),
         history: vec![],
         client: client.clone(),
     };
 
     let mut summary_to_json_agent = Agent {
         system: get_summary_to_json_prompt(lang),
-        model: "gpt-4-turbo".to_string(),
+        model: "gpt-4o".to_string(),
         history: vec![],
         client: client.clone(),
     };
